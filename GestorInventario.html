@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor de Inventario - Versión Clásica</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-50/90 text-slate-800 min-h-screen antialiased selection:bg-emerald-100 selection:text-emerald-900 pb-16">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200 gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-1 text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
+            Reporte Autónomo
+          </span>
+          <span class="text-xs text-slate-500 font-mono" id="fileInfo">Datos de demostración</span>
+        </div>
+        <h1 class="text-2xl md:text-3xl font-bold text-slate-900 mt-1">Control de Inventario y Pedidos</h1>
+        <p class="text-sm text-slate-500">Carga reportes .xlsx / .csv y analiza sugeridos, artículos a reclamar y urgencias.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="cursor-pointer px-4 py-2.5 bg-[#3f7263] hover:bg-[#346053] text-white font-semibold text-sm rounded-xl shadow-sm flex items-center gap-2 transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span>Cargar otro Excel (.xlsx)</span>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden" />
+        </label>
+        <button id="btnExport" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl border border-slate-200 flex items-center gap-2 transition active:scale-95">
+          <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>Exportar a Excel</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Drop Area -->
+    <div id="dropZone" class="p-5 rounded-2xl border-2 border-dashed border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60 transition flex flex-col sm:flex-row items-center justify-between gap-4 cursor-pointer shadow-xs">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xl border border-emerald-100">📊</div>
+        <div>
+          <p class="text-sm font-bold text-slate-800">Arrastra y suelta tu reporte Excel (.xlsx / .csv) aquí o haz clic</p>
+          <p class="text-xs text-slate-500">Procesa columnas: ARTICU_ID, TEXTO, CANT_STOCK, PENDIENTE_NP, CANT_DISPONIBLE, SUGERIDA_A_PEDIR</p>
+        </div>
+      </div>
+      <span class="text-xs font-mono bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-xl border border-slate-200">Listo</span>
+    </div>
+
+    <!-- Insights Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <button onclick="setFilter('ALL')" id="cardALL" class="text-left p-5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition relative overflow-hidden group shadow-xs">
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Artículos</div>
+        <div class="text-3xl font-extrabold text-slate-900 mt-2 font-mono" id="countALL">0</div>
+        <div class="text-xs text-slate-500 mt-1">Todos los ítems del reporte</div>
+      </button>
+
+      <button onclick="setFilter('SUGERIDOS')" id="cardSUGERIDOS" class="text-left p-5 rounded-2xl border border-sky-200/90 bg-[#f1f7fd] hover:bg-[#e7f2fc] transition relative overflow-hidden group shadow-xs">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-sky-800 uppercase tracking-wider">SUGERIDOS</span>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200">SUGERIDOS &gt; 0</span>
+        </div>
+        <div class="text-3xl font-extrabold text-sky-900 mt-2 font-mono" id="countSUGERIDOS">0</div>
+        <div class="text-xs text-sky-700/80 mt-1">Productos con pedido sugerido activo</div>
+      </button>
+
+      <button onclick="setFilter('RECLAMAR')" id="cardRECLAMAR" class="text-left p-5 rounded-2xl border border-amber-200/90 bg-[#fff9ee] hover:bg-[#fff2dd] transition relative overflow-hidden group shadow-xs">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">RECLAMAR</span>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">DISP &gt; 0 &amp; NEC &lt; 0</span>
+        </div>
+        <div class="text-3xl font-extrabold text-amber-900 mt-2 font-mono" id="countRECLAMAR">0</div>
+        <div class="text-xs text-amber-800/80 mt-1">Stock insuficiente pero con OC en tránsito</div>
+      </button>
+
+      <button onclick="setFilter('URGENTE')" id="cardURGENTE" class="text-left p-5 rounded-2xl border border-rose-200/90 bg-[#fdf2f4] hover:bg-[#fde7eb] transition relative overflow-hidden group shadow-xs">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-rose-800 uppercase tracking-wider">URGENTE</span>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200">DISP &lt; 0</span>
+        </div>
+        <div class="text-3xl font-extrabold text-rose-900 mt-2 font-mono" id="countURGENTE">0</div>
+        <div class="text-xs text-rose-800/80 mt-1">Quiebre crítico de inventario disponible</div>
+      </button>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="p-4 rounded-2xl border border-slate-200/90 bg-white flex flex-col md:flex-row gap-4 items-center justify-between shadow-xs">
+      <div class="relative flex-1 w-full">
+        <input type="text" id="searchInput" placeholder="Filtrar por ID (ARTICU_ID) o Nombre del producto..."
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-400 font-medium" />
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-500 font-mono">
+        Mostrando <span class="font-bold text-slate-900" id="showingCount">0</span> artículos
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="border border-slate-200/90 rounded-2xl overflow-hidden bg-white shadow-xs">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm whitespace-nowrap">
+          <thead class="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3.5 px-4">ID</th>
+              <th class="py-3.5 px-4 min-w-[280px]">Producto</th>
+              <th class="py-3.5 px-4 text-right">Comprometido</th>
+              <th class="py-3.5 px-4 text-right">Stock</th>
+              <th class="py-3.5 px-4 text-right">Disponible</th>
+              <th class="py-3.5 px-4 text-right">Necesidad (solo &lt; 0)</th>
+              <th class="py-3.5 px-4 text-right">Sugeridos</th>
+              <th class="py-3.5 px-4 text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-100 font-medium"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Datos 100% ficticios y genéricos para demostración
+    let inventoryData = [
+      {"id":"101","nombre":"Café Tostado Natural en Grano 500g","stock":-5,"comprometido":25,"disponible":-30,"sugeridos":50,"necesidad":-30,"necesidadNegativa":true,"cantOc":0,"cantVendida":140,"stkMinimo":20,"stkIdeal":50,"costo":8500,"moneda":"$","isSugerido":true,"isReclamar":false,"isUrgente":true},
+      {"id":"102","nombre":"Aceite de Oliva Extra Virgen 500ml","stock":4,"comprometido":18,"disponible":26,"sugeridos":0,"necesidad":-14,"necesidadNegativa":true,"cantOc":40,"cantVendida":95,"stkMinimo":15,"stkIdeal":40,"costo":6200,"moneda":"$","isSugerido":false,"isReclamar":true,"isUrgente":false},
+      {"id":"103","nombre":"Té Verde Orgánico en Saquitos x 25","stock":22,"comprometido":8,"disponible":14,"sugeridos":30,"necesidad":14,"necesidadNegativa":false,"cantOc":0,"cantVendida":110,"stkMinimo":25,"stkIdeal":60,"costo":1850,"moneda":"$","isSugerido":true,"isReclamar":false,"isUrgente":false},
+      {"id":"104","nombre":"Arroz Integral Grano Largo 1kg","stock":80,"comprometido":15,"disponible":65,"sugeridos":0,"necesidad":65,"necesidadNegativa":false,"cantOc":0,"cantVendida":75,"stkMinimo":30,"stkIdeal":80,"costo":2100,"moneda":"$","isSugerido":false,"isReclamar":false,"isUrgente":false},
+      {"id":"105","nombre":"Pasta Seca Penne Rigate 500g","stock":-12,"comprometido":35,"disponible":-47,"sugeridos":120,"necesidad":-47,"necesidadNegativa":true,"cantOc":0,"cantVendida":320,"stkMinimo":50,"stkIdeal":150,"costo":1400,"moneda":"$","isSugerido":true,"isReclamar":false,"isUrgente":true},
+      {"id":"106","nombre":"Harina de Almendras Pura 250g","stock":8,"comprometido":22,"disponible":16,"sugeridos":0,"necesidad":-14,"necesidadNegativa":true,"cantOc":30,"cantVendida":62,"stkMinimo":10,"stkIdeal":35,"costo":4900,"moneda":"$","isSugerido":false,"isReclamar":true,"isUrgente":false},
+      {"id":"107","nombre":"Miel Pura de Monte Silvestre 500g","stock":35,"comprometido":10,"disponible":25,"sugeridos":15,"necesidad":25,"necesidadNegativa":false,"cantOc":0,"cantVendida":88,"stkMinimo":30,"stkIdeal":60,"costo":3800,"moneda":"$","isSugerido":true,"isReclamar":false,"isUrgente":false},
+      {"id":"108","nombre":"Avena Instantánea en Hojuelas 500g","stock":120,"comprometido":20,"disponible":100,"sugeridos":0,"necesidad":100,"necesidadNegativa":false,"cantOc":0,"cantVendida":130,"stkMinimo":40,"stkIdeal":120,"costo":1650,"moneda":"$","isSugerido":false,"isReclamar":false,"isUrgente":false}
+    ];
+
+    let activeFilter = 'ALL';
+    let searchQuery = '';
+
+    function parseNum(val) {
+      if (val == null) return 0;
+      if (typeof val === 'number') return isNaN(val) ? 0 : val;
+      let s = String(val).replace(/["'$ ]/g, '');
+      if (s.includes('.') && s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+      else if (s.includes(',')) s = s.replace(',', '.');
+      const p = parseFloat(s);
+      return isNaN(p) ? 0 : p;
+    }
+
+    function processRows(rows) {
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(rows.length, 25); i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const txt = row.map(c => String(c||'').toUpperCase()).join(' ');
+        if (txt.includes('ARTICU_ID') || txt.includes('CANT_STOCK') || txt.includes('PENDIENTE_NP')) {
+          headerIdx = i;
+          break;
+        }
+      }
+      if (headerIdx === -1) headerIdx = 0;
+      const headers = rows[headerIdx].map(h => String(h||'').toUpperCase().trim());
+      const findCol = patterns => headers.findIndex(h => patterns.some(p => h.includes(p)));
+      
+      const colId = findCol(['ARTICU_ID', 'ID']);
+      const colTexto = findCol(['TEXTO', 'NOMBRE', 'DESCRIPCION']);
+      const colStock = findCol(['CANT_STOCK', 'STOCK']);
+      const colComp = findCol(['PENDIENTE_NP', 'COMPROMETIDO']);
+      const colDisp = findCol(['CANT_DISPONIBLE', 'DISPONIBLE']);
+      const colSug = findCol(['SUGERIDA_A_PEDIR', 'SUGERIDOS', 'SUGERIDO']);
+      const colOc = findCol(['CANT_OC']);
+
+      const items = [];
+      for (let r = headerIdx + 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row.length === 0) continue;
+        const id = colId !== -1 ? String(row[colId]||'').trim() : '';
+        const nombre = colTexto !== -1 ? String(row[colTexto]||'').trim() : '';
+        if (!id && !nombre) continue;
+
+        const stock = colStock !== -1 ? parseNum(row[colStock]) : 0;
+        const comprometido = colComp !== -1 ? parseNum(row[colComp]) : 0;
+        const disponible = colDisp !== -1 ? parseNum(row[colDisp]) : 0;
+        const sugeridos = colSug !== -1 ? parseNum(row[colSug]) : 0;
+        const cantOc = colOc !== -1 ? parseNum(row[colOc]) : 0;
+
+        const necesidad = stock - comprometido;
+        items.push({
+          id: id || String(items.length + 1),
+          nombre: nombre || 'Producto ' + id,
+          stock,
+          comprometido,
+          disponible,
+          sugeridos,
+          necesidad,
+          necesidadNegativa: necesidad < 0,
+          cantOc,
+          isSugerido: sugeridos > 0,
+          isReclamar: disponible > 0 && necesidad < 0,
+          isUrgente: disponible < 0
+        });
+      }
+      return items;
+    }
+
+    function render() {
+      const q = searchQuery.toLowerCase().trim();
+      const filtered = inventoryData.filter(it => {
+        if (activeFilter === 'SUGERIDOS' && !it.isSugerido) return false;
+        if (activeFilter === 'RECLAMAR' && !it.isReclamar) return false;
+        if (activeFilter === 'URGENTE' && !it.isUrgente) return false;
+
+        if (q) {
+          const matchId = it.id.toLowerCase().includes(q);
+          const matchName = it.nombre.toLowerCase().includes(q);
+          if (!matchId && !matchName) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('countALL').innerText = inventoryData.length;
+      document.getElementById('countSUGERIDOS').innerText = inventoryData.filter(i => i.isSugerido).length;
+      document.getElementById('countRECLAMAR').innerText = inventoryData.filter(i => i.isReclamar).length;
+      document.getElementById('countURGENTE').innerText = inventoryData.filter(i => i.isUrgente).length;
+      document.getElementById('showingCount').innerText = filtered.length;
+
+      ['ALL', 'SUGERIDOS', 'RECLAMAR', 'URGENTE'].forEach(f => {
+        const el = document.getElementById('card' + f);
+        if (f === activeFilter) {
+          el.classList.add('ring-2', 'ring-slate-400', 'shadow-sm');
+        } else {
+          el.classList.remove('ring-2', 'ring-slate-400', 'shadow-sm');
+        }
+      });
+
+      const tbody = document.getElementById('tableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-slate-500">No se encontraron productos coincidentes.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(it => {
+        let statusBadge = '<span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Normal</span>';
+        if (it.isUrgente) {
+          statusBadge = '<span class="text-xs px-2.5 py-0.5 rounded-full bg-[#fde7eb] text-[#9c1b35] border border-rose-200 font-bold">URGENTE</span>';
+        } else if (it.isReclamar) {
+          statusBadge = '<span class="text-xs px-2.5 py-0.5 rounded-full bg-[#fff0d6] text-[#8e5207] border border-amber-200 font-bold">RECLAMAR</span>';
+        } else if (it.isSugerido) {
+          statusBadge = '<span class="text-xs px-2.5 py-0.5 rounded-full bg-[#e6f1fc] text-[#134d7d] border border-sky-200 font-bold">SUGERIDO</span>';
+        }
+
+        let necesidadHtml = '<span class="text-slate-400 text-xs">—</span>';
+        if (it.necesidadNegativa) {
+          necesidadHtml = '<span class="font-bold text-rose-800 font-mono bg-[#fde7eb] px-2 py-0.5 rounded border border-rose-200">' + it.necesidad + '</span>';
+        }
+
+        const dispClass = it.disponible < 0 ? 'text-rose-800 bg-[#fde9ec] border border-rose-200 px-2 py-0.5 rounded font-bold' : it.disponible === 0 ? 'text-slate-400' : 'text-emerald-800 bg-[#edf7f1] border border-emerald-200/80 px-2 py-0.5 rounded font-bold';
+        const sugClass = it.sugeridos > 0 ? 'text-sky-800 bg-[#eaf3fc] border border-sky-200 px-2 py-0.5 rounded font-bold' : 'text-slate-400';
+
+        return '<tr class="hover:bg-slate-50/80 transition border-b border-slate-100">' +
+          '<td class="py-3 px-4 font-mono text-slate-700 text-xs font-bold"><span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">#' + it.id + '</span></td>' +
+          '<td class="py-3 px-4 text-slate-800 font-semibold max-w-xs truncate" title="' + it.nombre + '">' + it.nombre + '</td>' +
+          '<td class="py-3 px-4 text-right font-mono text-amber-800 font-semibold">' + it.comprometido + '</td>' +
+          '<td class="py-3 px-4 text-right font-mono text-slate-700">' + it.stock + '</td>' +
+          '<td class="py-3 px-4 text-right font-mono"><span class="' + dispClass + '">' + it.disponible + '</span></td>' +
+          '<td class="py-3 px-4 text-right font-mono">' + necesidadHtml + '</td>' +
+          '<td class="py-3 px-4 text-right font-mono"><span class="' + sugClass + '">' + it.sugeridos + '</span></td>' +
+          '<td class="py-3 px-4 text-center">' + statusBadge + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function setFilter(f) {
+      activeFilter = f;
+      render();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', e => {
+      searchQuery = e.target.value;
+      render();
+    });
+
+    function handleFile(file) {
+      if (!file) return;
+      document.getElementById('fileInfo').innerText = file.name;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { header: 1, defval: '' });
+        inventoryData = processRows(rows);
+        render();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    document.getElementById('fileInput').addEventListener('change', e => {
+      handleFile(e.target.files[0]);
+    });
+
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-slate-400'); });
+    dropZone.addEventListener('dragleave', e => { dropZone.classList.remove('border-slate-400'); });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('border-slate-400');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    document.getElementById('btnExport').addEventListener('click', () => {
+      const q = searchQuery.toLowerCase().trim();
+      const exportList = inventoryData.filter(it => {
+        if (activeFilter === 'SUGERIDOS' && !it.isSugerido) return false;
+        if (activeFilter === 'RECLAMAR' && !it.isReclamar) return false;
+        if (activeFilter === 'URGENTE' && !it.isUrgente) return false;
+        if (q && !it.id.toLowerCase().includes(q) && !it.nombre.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      const dataToExport = exportList.map(item => ({
+        'ID ARTICULO': item.id,
+        'NOMBRE DEL PRODUCTO': item.nombre,
+        'STOCK': item.stock,
+        'COMPROMETIDO (PENDIENTE NP)': item.comprometido,
+        'DISPONIBLE': item.disponible,
+        'NECESIDAD': item.necesidad,
+        'SUGERIDA A PEDIR': item.sugeridos,
+        'ESTADO': item.isUrgente ? 'URGENTE' : item.isReclamar ? 'RECLAMAR' : item.isSugerido ? 'SUGERIDO' : 'NORMAL'
+      }));
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+      XLSX.writeFile(wb, 'inventario_reporte.xlsx');
+    });
+
+    render();
+  </script>
+</body>
+</html>
