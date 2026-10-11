@@ -8,7 +8,7 @@ export default defineConfig({
     tailwindcss(),
     react(),
   ],
-  base: './',
+  base: '/GestorInventario/',
   build: {
     outDir: 'dist',
     sourcemap: false,
